@@ -93,7 +93,7 @@ void Timer1A_Handler(void){
 	TIMER1_CTL_R = 0x00000000;    				// desable TIMER1A
 	
 	// Configuração da razão de trabalho. 4 possibilidades com chaves
-	GPIO_PORTF_DATA_R = 0x0E;
+	//GPIO_PORTF_DATA_R = 0x0E;
 	if (GPIO_PORTF_DATA_R == 0x00){
 		TIMER1_TAILR_R = PERIOD * 0.25;/// de 25%
 	}else if (GPIO_PORTF_DATA_R == 0x01){
@@ -108,6 +108,7 @@ void Timer1A_Handler(void){
 void Timer2A_Handler(void){
 	TIMER2_ICR_R = TIMER_ICR_TATOCINT;		// acknowledge TIMER2A timeout
 	TIMER2_CTL_R = 0x00000000;    				// desable TIMER2A
+	liga_PWM = 0;                         //  desliga PWM
 	
 	
 }
@@ -117,7 +118,7 @@ void Timer2A_Handler(void){
 int main(void){ 
 	int32_t data;
 	int32_t contadorLiberacaoAlcool = 0;
-	int32_t tempoMaximo = 0;
+	int32_t tempoMaximo = 16000000;
 	char UART_data;
   uint8_t estado = 1;   // variável da maáquina de estado
 	Output_Init();              // initialize output device
@@ -169,15 +170,20 @@ int main(void){
 				// Leitura da porta Serial
 				UART_data = UART_InChar1();
 				if (UART_data == 'a'){
-					printf("\nADC Aumentar o limite de tempo:");
-					tempoMaximo = PERIOD/2;
-					Timer1_One_Shot_Init(tempoMaximo+PERIOD); 		// initialize timer com + 100 Hz
+					//testar limite 1.4 e zerar pwm 
+					tempoMaximo += 16000000*0.1;
+					printf("\nADC Aumentar o limite de tempo: %d ms", tempoMaximo/16000);
+					
+					//Timer1_One_Shot_Init(tempoMaximo+PERIOD); 		// initialize timer com + 100 Hz
 				}else if (UART_data == 'd'){
-					printf("\nADC Aumentar o limite de tempo:");
-					Timer1_One_Shot_Init(tempoMaximo-PERIOD); 		// initialize timer com - 100 Hz
+					tempoMaximo -= 16000000*0.1;
+					printf("\nADC Diminuir o limite de tempo: %d ms", tempoMaximo/16000);
+					
+					//Timer1_One_Shot_Init(tempoMaximo-PERIOD); 		// initialize timer com - 100 Hz
 				}else if (UART_data == 'r'){
-					printf("\nADC Resear o tempo limite");
-					Timer1_One_Shot_Init(PERIOD/2); 		// initialize timer1 (50%)
+					tempoMaximo = 16000000;
+					printf("\nADC Resear o tempo limite %d ms", tempoMaximo/16000);
+					//Timer1_One_Shot_Init(PERIOD/2); 		// initialize timer1 (50%)
 				}
 				estado = 5; // muda para o estado 5
 				break;
@@ -197,7 +203,7 @@ int main(void){
 				
 			case 6:
 				GPIO_PORTF_DATA_R = 0x0E; // acende todos os LED's
-			  Timer1_Init(tempoMaximo); 							 	// initialize timer1 (tempoMaximo definido no estado 4)
+			  //Timer1_Init(tempoMaximo); 							 	// initialize timer1 (tempoMaximo definido no estado 4)
 				estado = 7;               // Vai para o para o estado 7. Contador de acionamento			
 				//Ligar o temporizador no tempo limite
 				//Ligar o temporizador
@@ -213,9 +219,9 @@ int main(void){
 				
 				break;
 			case 8:				
-					GPIO_PORTF_DATA_R = 0x0; // desliga todos os LED's		
+					GPIO_PORTF_DATA_R = 0x0E; // desliga todos os LED's		
 					SysTick_Wait10ms(10); // 10 x Atraso de 100 ms
-					GPIO_PORTF_DATA_R = 0x0E; // acende todos os LED's	
+					GPIO_PORTF_DATA_R = 0x0; // acende todos os LED's	
 					SysTick_Wait10ms(10); // 10 x Atraso de 100 ms
 					//Leitura do ADC
 					data = ADC0_InSeq3();
@@ -235,17 +241,19 @@ int main(void){
 					
 			case 9:
 				liga_PWM = 0;
-			  Timer2_Init(0);
+			  TIMER2_CTL_R = 0x00000000;
+			  //Timer2_Init(0);
 				printf("\nLiberacao do alcool em gel desabilitada devido ao tempo limite");
 				estado = 10;
 			break;
 			
 			case 10:
-				GPIO_PORTF_DATA_R = 0x04; // acende o LED verde
+				
+				GPIO_PORTF_DATA_R = 0x08; // acende o LED verde
 				SysTick_Wait10ms(10); // 10 x Atraso de 100 ms
 				GPIO_PORTF_DATA_R = 0x0; // desliga todos os LED's
 				SysTick_Wait10ms(10); // 10 x Atraso de 100 ms
-			
+			  data = ADC0_InSeq3();
 				if(data > 2047){ // Testa se a tensão > 1,65V
 					estado = 10; // Volta para o estado 10. Repete verificação
 				}else{
@@ -255,7 +263,7 @@ int main(void){
 			
 			case 11:
 				liga_PWM = 0;
-			  Timer2_Init(0);
+			  TIMER2_CTL_R = 0x00000000;
 				printf("\nLiberacao do alcool em gel desabilitada");
 				estado = 4;
 			break;
