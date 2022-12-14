@@ -9,5 +9,6 @@
 .\main.o: porta.h
 .\main.o: Timer0.h
 .\main.o: Timer1.h
+.\main.o: Timer2.h
 .\main.o: tm4c123gh6pm.h
 .\main.o: systick.h

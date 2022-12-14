@@ -460,6 +460,21 @@
               <FileType>1</FileType>
               <FilePath>.\SysTick.c</FilePath>
             </File>
+            <File>
+              <FileName>SysTick.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>E:\Meu Drive\6° Período\S. Microcontrolados\Roteiro 4\Ex1\SysTick.h</FilePath>
+            </File>
+            <File>
+              <FileName>Timer2.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\lucas\Downloads\Timer2A_Int\Timer2.c</FilePath>
+            </File>
+            <File>
+              <FileName>Timer2.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\..\lucas\Downloads\Timer2A_Int\Timer2.h</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>

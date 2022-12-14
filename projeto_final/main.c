@@ -42,6 +42,7 @@ Autor: Lucas Teixeira & Patrick Zilz
 #include "porta.h"
 #include "Timer0.h"
 #include "Timer1.h"
+#include "Timer2.h"
 #include "tm4c123gh6pm.h"
 #include "systick.h"
 
@@ -87,18 +88,36 @@ void Timer0A_Handler(void){									// a cada 10ms cai nessa interrupção 100Hz
 }
 
 void Timer1A_Handler(void){
-	TIMER1_ICR_R = TIMER_ICR_TATOCINT;		// acknowledge TIMER0A timeout
+	TIMER1_ICR_R = TIMER_ICR_TATOCINT;		// acknowledge TIMER1A timeout
 	GPIO_PORTC_DATA_R &= ~0x20;						// LED off
 	TIMER1_CTL_R = 0x00000000;    				// desable TIMER1A
-	// testa chaves para configurar a razaão de trabalho: 4 possibilidades
-	// 50%
-	TIMER1_TAILR_R = PERIOD/2;/// de 50% e 90%
+	
+	// Configuração da razão de trabalho. 4 possibilidades com chaves
+	GPIO_PORTF_DATA_R = 0x0E;
+	if (GPIO_PORTF_DATA_R == 0x00){
+		TIMER1_TAILR_R = PERIOD * 0.25;/// de 25%
+	}else if (GPIO_PORTF_DATA_R == 0x01){
+		TIMER1_TAILR_R = PERIOD * 0.50;/// de 50%
+	}else if(GPIO_PORTF_DATA_R == 0x10){
+		TIMER1_TAILR_R = PERIOD * 0.75;/// de 75%
+	}else if(GPIO_PORTF_DATA_R == 0x11){
+		TIMER1_TAILR_R = PERIOD * 0.90;/// de 90%
+	}	
+}
+
+void Timer2A_Handler(void){
+	TIMER2_ICR_R = TIMER_ICR_TATOCINT;		// acknowledge TIMER2A timeout
+	TIMER2_CTL_R = 0x00000000;    				// desable TIMER2A
+	
+	
 }
 
 
 
 int main(void){ 
 	int32_t data;
+	int32_t contadorLiberacaoAlcool = 0;
+	int32_t tempoMaximo = 0;
 	char UART_data;
   uint8_t estado = 1;   // variável da maáquina de estado
 	Output_Init();              // initialize output device
@@ -151,11 +170,15 @@ int main(void){
 				UART_data = UART_InChar1();
 				if (UART_data == 'a'){
 					printf("\nADC Aumentar o limite de tempo:");
+					tempoMaximo = PERIOD/2;
+					Timer1_One_Shot_Init(tempoMaximo+PERIOD); 		// initialize timer com + 100 Hz
 				}else if (UART_data == 'd'){
 					printf("\nADC Aumentar o limite de tempo:");
+					Timer1_One_Shot_Init(tempoMaximo-PERIOD); 		// initialize timer com - 100 Hz
 				}else if (UART_data == 'r'){
-					printf("\nADC Aumentar o limite de tempo: 1 segundo");
-				}				
+					printf("\nADC Resear o tempo limite");
+					Timer1_One_Shot_Init(PERIOD/2); 		// initialize timer1 (50%)
+				}
 				estado = 5; // muda para o estado 5
 				break;
 				
@@ -163,6 +186,7 @@ int main(void){
 				//Leitura do ADC
 				data = ADC0_InSeq3();
 				if(data > 2047){ // Testa se a tensão > 1,65V
+					Timer2_Init(tempoMaximo);
 					liga_PWM = 1;
 					estado = 6; // muda para o para o estado 6
 				}else{
@@ -173,14 +197,69 @@ int main(void){
 				
 			case 6:
 				GPIO_PORTF_DATA_R = 0x0E; // acende todos os LED's
+			  Timer1_Init(tempoMaximo); 							 	// initialize timer1 (tempoMaximo definido no estado 4)
+				estado = 7;               // Vai para o para o estado 7. Contador de acionamento			
 				//Ligar o temporizador no tempo limite
 				//Ligar o temporizador
-				//Se chegar o tmepo limite, desligar o PWM
+				//Se chegar o tempo limite, desligar o PWM
 				
 				break;
 			case 7:
+				contadorLiberacaoAlcool++;
+				printf("\nLiberacao do alcool em gel habilitada");
+				printf("\nNumero de acionamentos com liberacao de alcool em gel = %d",contadorLiberacaoAlcool);
+				estado = 8;               // Vai para o para o estado 8. 
+				
 				
 				break;
+			case 8:				
+					GPIO_PORTF_DATA_R = 0x0; // desliga todos os LED's		
+					SysTick_Wait10ms(10); // 10 x Atraso de 100 ms
+					GPIO_PORTF_DATA_R = 0x0E; // acende todos os LED's	
+					SysTick_Wait10ms(10); // 10 x Atraso de 100 ms
+					//Leitura do ADC
+					data = ADC0_InSeq3();
+					if(data > 2047){ // Testa se a tensão > 1,65V
+						//Verifica tempo limite no timer2
+						if(liga_PWM == 0){
+							estado = 9; // vai para o para o estado 9. Desliga PWM e temporizador
+						}else{
+						// PWM ligado
+							estado = 8; // vai para o para o estado 8. Repete verificação
+						}						
+					}else{
+						//não está detectando presença
+						estado = 11; // vai para o para o estado 11. Desligar o temporizador e o PWM
+					}
+			break;
+					
+			case 9:
+				liga_PWM = 0;
+			  Timer2_Init(0);
+				printf("\nLiberacao do alcool em gel desabilitada devido ao tempo limite");
+				estado = 10;
+			break;
+			
+			case 10:
+				GPIO_PORTF_DATA_R = 0x04; // acende o LED verde
+				SysTick_Wait10ms(10); // 10 x Atraso de 100 ms
+				GPIO_PORTF_DATA_R = 0x0; // desliga todos os LED's
+				SysTick_Wait10ms(10); // 10 x Atraso de 100 ms
+			
+				if(data > 2047){ // Testa se a tensão > 1,65V
+					estado = 10; // Volta para o estado 10. Repete verificação
+				}else{
+					estado = 11; // Volta para o estado 11. Desliga sistema
+				}
+			break;
+			
+			case 11:
+				liga_PWM = 0;
+			  Timer2_Init(0);
+				printf("\nLiberacao do alcool em gel desabilitada");
+				estado = 4;
+			break;
+			
 			default:
 				
 				break;
